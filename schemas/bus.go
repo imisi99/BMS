@@ -1,3 +1,5 @@
 package schemas
 
-type Bus struct{}
+type Bus struct {
+	ID string
+}
