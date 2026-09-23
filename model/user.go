@@ -1,5 +1,3 @@
 package model
 
-type User struct {
-	GormModel
-}
+type User struct{}
