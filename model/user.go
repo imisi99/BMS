@@ -1,3 +1,4 @@
+// Package model
 package model
 
 import (
@@ -12,6 +13,7 @@ type User struct {
 	FullName      string `gorm:"column:fullname;not null"`
 	UserName      string `gorm:"column:username;not null;index"`
 	Email         string `gorm:"unique;not null"`
+	Password      string `gorm:"not null"`
 	Notifications bool
 }
 
