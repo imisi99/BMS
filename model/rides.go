@@ -5,7 +5,7 @@ type Rides struct {
 
 	BusID     string
 	RouteID   string
-	longitude string
-	latitude  string
+	Longitude string
+	Latitude  string
 	Capacity  int
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -27,16 +28,16 @@ type JWTClaims struct {
 	jwt.RegisteredClaims
 }
 
-func HashPassword(password string) (string, error) {
+func (s *Service) HashPassword(password string) (string, error) {
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(hashed), err
 }
 
-func VerifyPassword(password, hashPassword string) error {
+func (s *Service) VerifyPassword(password, hashPassword string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashPassword), []byte(password))
 }
 
-func GenerateJWT(userID, purpose string, expiry time.Duration) (string, error) {
+func (s *Service) GenerateJWT(userID, purpose string, expiry time.Duration) (string, error) {
 	claims := JWTClaims{
 		UserID:  userID,
 		Purpose: purpose,
@@ -50,7 +51,7 @@ func GenerateJWT(userID, purpose string, expiry time.Duration) (string, error) {
 	return token.SignedString([]byte(JWTSecret))
 }
 
-func VerifyJWT(tokenString string) (*JWTClaims, error) {
+func (s *Service) VerifyJWT(tokenString string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, &core.CustomError{Code: http.StatusBadRequest, Message: "Invalid token!"}
@@ -75,11 +76,11 @@ func (s *Service) Authorization(payload schemas.VerifyUser) (string, error) {
 		return "", err
 	}
 
-	if err := VerifyPassword(payload.Password, user.Password); err != nil {
+	if err := s.VerifyPassword(payload.Password, user.Password); err != nil {
 		return "", &core.CustomError{Code: http.StatusNotFound, Message: "Invalid username or password."}
 	}
 
-	token, err := GenerateJWT(user.ID, "login", JWTExpiry)
+	token, err := s.GenerateJWT(user.ID, "login", JWTExpiry)
 	if err != nil {
 		return "", &core.CustomError{Code: http.StatusInternalServerError, Message: "Failed to generate token."}
 	}
@@ -101,7 +102,7 @@ func (s *Service) Authentication() gin.HandlerFunc {
 			return
 		}
 
-		payload, err := VerifyJWT(parts[1])
+		payload, err := s.VerifyJWT(parts[1])
 		if err != nil {
 			cm := err.(*core.CustomError)
 			ctx.AbortWithStatusJSON(cm.Code, gin.H{"msg": cm.Message})
@@ -113,4 +114,15 @@ func (s *Service) Authentication() gin.HandlerFunc {
 
 		ctx.Next()
 	}
+}
+
+func (s *Service) VerifyAuth(uid, purpose string) error {
+	if uuid.Validate(uid) != nil {
+		return &core.CustomError{Code: http.StatusBadRequest, Message: "Invalid user id."}
+	}
+
+	if purpose != "login" {
+		return &core.CustomError{Code: http.StatusBadRequest, Message: "Invalid purpose."}
+	}
+	return nil
 }

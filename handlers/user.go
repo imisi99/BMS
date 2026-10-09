@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 
 	"BMS/core"
@@ -19,7 +20,7 @@ func (s *Service) AddUser(ctx *gin.Context) {
 		return
 	}
 
-	hashedPass, err := HashPassword(payload.Password)
+	hashedPass, err := s.HashPassword(payload.Password)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"msg": "Failed to hash password."})
 		return
@@ -38,7 +39,14 @@ func (s *Service) AddUser(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"msg": "User created successfully."})
+	token, err := s.GenerateJWT(user.ID, "login", JWTExpiry)
+	if err != nil {
+		log.Println("Failed to generate token -> ", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"msg": "Failed to create access token."})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"msg": "User created successfully.", "token": token})
 }
 
 func (s *Service) VerifyUser(ctx *gin.Context) {
@@ -50,5 +58,52 @@ func (s *Service) VerifyUser(ctx *gin.Context) {
 	}
 
 	var token string
+
+	token, err := s.Authorization(payload)
+	if err != nil {
+		cm := err.(*core.CustomError)
+		ctx.JSON(cm.Code, gin.H{"msg": cm.Message})
+		return
+	}
 	ctx.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+func (s *Service) AddRoute(ctx *gin.Context) {
+	uid := ctx.GetString("userID")
+	purpose := ctx.GetString("purpose")
+	if err := s.VerifyAuth(uid, purpose); err != nil {
+		cm := err.(*core.CustomError)
+		ctx.JSON(cm.Code, gin.H{"msg": cm.Message})
+		return
+	}
+
+	var payload schemas.UpdateRoute
+
+	if err := s.DB.SaveRoute(uid, payload.RouteID); err != nil {
+		cm := err.(*core.CustomError)
+		ctx.JSON(cm.Code, gin.H{"msg": cm.Message})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"msg": "Route saved successfully."})
+}
+
+func (s *Service) RemoveRoute(ctx *gin.Context) {
+	uid := ctx.GetString("userID")
+	purpose := ctx.GetString("purpose")
+	if err := s.VerifyAuth(uid, purpose); err != nil {
+		cm := err.(*core.CustomError)
+		ctx.JSON(cm.Code, gin.H{"msg": cm.Message})
+		return
+	}
+
+	var payload schemas.UpdateRoute
+
+	if err := s.DB.RemoveRoute(uid, payload.RouteID); err != nil {
+		cm := err.(*core.CustomError)
+		ctx.JSON(cm.Code, gin.H{"msg": cm.Message})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"msg": "Route removed successfully."})
 }
