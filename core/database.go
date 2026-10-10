@@ -14,6 +14,8 @@ type DB interface {
 	AddUser(user *model.User) error
 	VerifyUser(user *model.User, username string) error
 	FetchUser(uid string, user *model.User) error
+	AddStop(stop *model.Stop) error
+	AddRoute(route *model.Route, stops []string) error
 	FetchRoute(rid string, route *model.Route) error
 	SaveRoute(uid, rid string) error
 	RemoveRoute(uid, rid string) error
@@ -25,6 +27,7 @@ type GormDB struct {
 
 func (db *GormDB) AddUser(user *model.User) error {
 	if err := db.DB.Create(user).Error; err != nil {
+		log.Println("[GormDB] Failed to create user -> ", err.Error())
 		return &CustomError{Code: http.StatusInternalServerError, Message: "Failed to create new user."}
 	}
 	return nil
@@ -48,6 +51,44 @@ func (db *GormDB) FetchUser(uid string, user *model.User) error {
 		}
 		log.Println("[GormDB] Failed to fetch user -> ", err.Error())
 		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
+	}
+	return nil
+}
+
+func (db *GormDB) AddStop(stop *model.Stop) error {
+	if err := db.DB.Create(stop).Error; err != nil {
+		log.Println("[GormDB] Failed to create stop -> ", err.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "Failed to create new stop"}
+	}
+	return nil
+}
+
+func (db *GormDB) AddRoute(route *model.Route, stops []string) error {
+	if err := db.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit("Stops").Create(route).Error; err != nil {
+			return err
+		}
+
+		links := make([]model.RouteStop, len(stops))
+		for i, sid := range stops {
+			links[i] = model.RouteStop{
+				RouteID:  route.ID,
+				Position: i + 1,
+				StopID:   sid,
+			}
+		}
+
+		if err := tx.Omit("Stop").Create(&links).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		if errors.Is(err, gorm.ErrForeignKeyViolated) {
+			return &CustomError{Code: http.StatusBadRequest, Message: "One or more stops do not exist"}
+		}
+		log.Println("[GormDB] Failed to create route -> ", err.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "Failed to create new route."}
+
 	}
 	return nil
 }

@@ -25,6 +25,7 @@ var (
 type JWTClaims struct {
 	UserID  string
 	Purpose string
+	Admin   bool
 	jwt.RegisteredClaims
 }
 
@@ -37,10 +38,11 @@ func (s *Service) VerifyPassword(password, hashPassword string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashPassword), []byte(password))
 }
 
-func (s *Service) GenerateJWT(userID, purpose string, expiry time.Duration) (string, error) {
+func (s *Service) GenerateJWT(userID, purpose string, admin bool, expiry time.Duration) (string, error) {
 	claims := JWTClaims{
 		UserID:  userID,
 		Purpose: purpose,
+		Admin:   admin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -70,7 +72,7 @@ func (s *Service) VerifyJWT(tokenString string) (*JWTClaims, error) {
 	return payload, nil
 }
 
-func (s *Service) Authorization(payload schemas.VerifyUser) (string, error) {
+func (s *Service) Authorization(payload schemas.VerifyUser, admin bool) (string, error) {
 	var user model.User
 	if err := s.DB.VerifyUser(&user, payload.UserName); err != nil {
 		return "", err
@@ -80,7 +82,7 @@ func (s *Service) Authorization(payload schemas.VerifyUser) (string, error) {
 		return "", &core.CustomError{Code: http.StatusNotFound, Message: "Invalid username or password."}
 	}
 
-	token, err := s.GenerateJWT(user.ID, "login", JWTExpiry)
+	token, err := s.GenerateJWT(user.ID, "login", admin, JWTExpiry)
 	if err != nil {
 		return "", &core.CustomError{Code: http.StatusInternalServerError, Message: "Failed to generate token."}
 	}
@@ -111,6 +113,7 @@ func (s *Service) Authentication() gin.HandlerFunc {
 
 		ctx.Set("userID", payload.UserID)
 		ctx.Set("purpose", payload.Purpose)
+		ctx.Set("admin", payload.Admin)
 
 		ctx.Next()
 	}
@@ -123,6 +126,20 @@ func (s *Service) VerifyAuth(uid, purpose string) error {
 
 	if purpose != "login" {
 		return &core.CustomError{Code: http.StatusBadRequest, Message: "Invalid purpose."}
+	}
+	return nil
+}
+
+func (s *Service) VerifyAdminAuth(uid, purpose string, admin bool) error {
+	if uuid.Validate(uid) != nil {
+		return &core.CustomError{Code: http.StatusBadRequest, Message: "Invalid user id."}
+	}
+
+	if purpose != "login" {
+		return &core.CustomError{Code: http.StatusBadRequest, Message: "Invalid purpose."}
+	}
+	if !admin {
+		return &core.CustomError{Code: http.StatusForbidden, Message: "Admin access needed."}
 	}
 	return nil
 }

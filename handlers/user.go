@@ -39,7 +39,7 @@ func (s *Service) AddUser(ctx *gin.Context) {
 		return
 	}
 
-	token, err := s.GenerateJWT(user.ID, "login", JWTExpiry)
+	token, err := s.GenerateJWT(user.ID, "login", false, JWTExpiry)
 	if err != nil {
 		log.Println("Failed to generate token -> ", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"msg": "Failed to create access token."})
@@ -59,7 +59,7 @@ func (s *Service) VerifyUser(ctx *gin.Context) {
 
 	var token string
 
-	token, err := s.Authorization(payload)
+	token, err := s.Authorization(payload, false)
 	if err != nil {
 		cm := err.(*core.CustomError)
 		ctx.JSON(cm.Code, gin.H{"msg": cm.Message})
