@@ -19,6 +19,11 @@ type DB interface {
 	FetchRoute(rid string, route *model.Route) error
 	SaveRoute(uid, rid string) error
 	RemoveRoute(uid, rid string) error
+	AddRide(ride *model.Ride) error
+	UpdateRide(rid string, cap int, long, lat float64) error
+	GetRide(rid string, ride *model.Ride) error
+	FindRideByRoute(rid string, rides *[]model.Ride) error
+	FindRideByStops(start, stop string, rides *[]model.Ride) error
 }
 
 type GormDB struct {
@@ -129,5 +134,49 @@ func (db *GormDB) RemoveRoute(uid, rid string) error {
 		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
 	}
 
+	return nil
+}
+
+func (db *GormDB) AddRide(ride *model.Ride) error {
+	if err := db.DB.Create(ride).Error; err != nil {
+		log.Println("[GormDB] Failed to create stop -> ", err.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "Failed to create new ride"}
+	}
+	return nil
+}
+
+func (db *GormDB) UpdateRide(rid string, cap int, long, lat float64) error {
+	if res := db.DB.Model(&model.Ride{}).Where("id = ?", rid).Updates(map[string]any{
+		"latitude": lat, "longitude": long, "cap": cap,
+	}); res.RowsAffected == 0 || res.Error != nil {
+		if res.RowsAffected == 0 {
+			return &CustomError{Code: http.StatusNotFound, Message: "Ride not found."}
+		}
+		log.Println("[GormDB] Failed to update ride -> ", res.Error.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
+	}
+	return nil
+}
+
+func (db *GormDB) GetRide(rid string, ride *model.Ride) error {
+	if err := db.DB.Preload("Bus").Where("id = ?", rid).First(ride).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &CustomError{Code: http.StatusNotFound, Message: "Ride not found."}
+		}
+		log.Println("[GormDB] Failed to get ride -> ", err.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
+	}
+	return nil
+}
+
+func (db *GormDB) FindRideByRoute(rid string, rides *[]model.Ride) error {
+	if err := db.DB.Preload("Bus").Where("routeid = ?", rid).Find(rides).Error; err != nil {
+		log.Println("[GormDB] Failed to find rides -> ", err.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "Failed to find a ride"}
+	}
+	return nil
+}
+
+func (db *GormDB) FindRideByStops(start, stop string, rides *[]model.Ride) error {
 	return nil
 }
