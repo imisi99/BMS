@@ -14,3 +14,7 @@ type CreateStop struct {
 type UpdateRoute struct {
 	RouteID string `json:"routeid" binding:"required"`
 }
+
+type UpdateStop struct {
+	StopID string `json:"stopid" binding:"required"`
+}

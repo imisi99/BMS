@@ -12,3 +12,15 @@ type VerifyUser struct {
 	UserName string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
+
+type ViewSavedRoutes struct {
+	RouteID string
+	Name    string
+	Start   string
+	Stop    string
+}
+
+type ViewSavedStops struct {
+	StopID string
+	Name   string
+}

@@ -19,6 +19,7 @@ type User struct {
 
 	// Relatons
 	Routes []*Route `gorm:"many2many:user_routes"`
+	Stops  []*Stop  `gorm:"many2many:user_stops"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) (err error) {

@@ -16,8 +16,11 @@ type DB interface {
 	FetchUser(uid string, user *model.User) error
 	AddStop(stop *model.Stop) error
 	AddRoute(route *model.Route, stops []string) error
+	GetRoutes(uid string, user *model.User) error
+	GetStops(uid string, user *model.User) error
 	FetchRoute(rid string, route *model.Route) error
 	SaveRoute(uid, rid string) error
+	SaveStop(uid, sid string) error
 	RemoveRoute(uid, rid string) error
 	AddRide(ride *model.Ride) error
 	UpdateRide(rid string, cap int, long, lat float64) error
@@ -98,6 +101,29 @@ func (db *GormDB) AddRoute(route *model.Route, stops []string) error {
 	return nil
 }
 
+func (db *GormDB) GetRoutes(uid string, user *model.User) error {
+	if err := db.DB.Preload("Routes.Stops.Stop").Where("id = ?", uid).First(user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &CustomError{Code: http.StatusNotFound, Message: "User not found."}
+		}
+		log.Println("[GormDB] Failed to fetch routes -> ", err.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
+	}
+
+	return nil
+}
+
+func (db *GormDB) GetStops(uid string, user *model.User) error {
+	if err := db.DB.Preload("Stop").Where("id = ?", uid).First(user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &CustomError{Code: http.StatusNotFound, Message: "User not found."}
+		}
+		log.Println("[GormDB] Failed to fetch stops -> ", err.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
+	}
+	return nil
+}
+
 func (db *GormDB) FetchRoute(rid string, route *model.Route) error {
 	if err := db.DB.Where("id = ?", rid).First(route).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -111,7 +137,7 @@ func (db *GormDB) FetchRoute(rid string, route *model.Route) error {
 
 func (db *GormDB) SaveRoute(uid, rid string) error {
 	user := model.User{GormModel: model.GormModel{ID: uid}}
-	route := model.User{GormModel: model.GormModel{ID: rid}}
+	route := model.Route{GormModel: model.GormModel{ID: rid}}
 	if err := db.DB.Model(&user).Association("Routes").Append(&route); err != nil {
 		if errors.Is(err, gorm.ErrForeignKeyViolated) {
 			return &CustomError{Code: http.StatusNotFound, Message: "User or route not found."}
@@ -120,6 +146,20 @@ func (db *GormDB) SaveRoute(uid, rid string) error {
 		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
 	}
 
+	return nil
+}
+
+func (db *GormDB) SaveStop(uid, sid string) error {
+	user := model.User{GormModel: model.GormModel{ID: uid}}
+	stop := model.Stop{GormModel: model.GormModel{ID: sid}}
+	if err := db.DB.Model(&user).Association("Stops").Append(&stop); err != nil {
+		if errors.Is(err, gorm.ErrForeignKeyViolated) {
+			return &CustomError{Code: http.StatusNotFound, Message: "User or stop not found."}
+		}
+		log.Println("[GormDB] Failed to save stop -> ", err.Error())
+		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
+
+	}
 	return nil
 }
 
@@ -133,7 +173,6 @@ func (db *GormDB) RemoveRoute(uid, rid string) error {
 		log.Println("[GormDB] Failed to save route -> ", err.Error())
 		return &CustomError{Code: http.StatusInternalServerError, Message: "server error."}
 	}
-
 	return nil
 }
 
